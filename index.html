@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Same CSS as provided SMM panel -->
+    <style>
+        /* Add these styles to existing CSS */
+        .admin-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 10000;
+            display: none;
+        }
+
+        .control-panel {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 15px;
+        }
+
+        .service-log-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .service-log-table th,
+        .service-log-table td {
+            padding: 12px;
+            border: 1px solid #eee;
+            text-align: left;
+        }
+
+        .admin-tools {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <!-- Add this admin access button -->
+    <button class="auth-btn admin-tools" onclick="showAdminLogin()">
+        <i class="fas fa-lock"></i> Admin Panel
+    </button>
+
+    <!-- Admin Login Overlay -->
+    <div class="admin-overlay" id="adminOverlay">
+        <div class="control-panel">
+            <h2 style="color: var(--glow); margin-bottom: 2rem;">Glow SMM Control Panel</h2>
+            
+            <div class="input-group">
+                <input type="password" id="adminPassword" placeholder="Enter Admin Password">
+                <button class="auth-btn" onclick="verifyAdmin()">Access Panel</button>
+            </div>
+
+            <!-- Service Management Section -->
+            <div id="serviceManagement" style="display: none;">
+                <h3>Service Management</h3>
+                
+                <!-- Service Statistics -->
+                <div class="payment-details" style="margin: 1rem 0;">
+                    <h4>Service Statistics</h4>
+                    <p>Total Services: <span id="totalServices">0</span></p>
+                    <p>Most Popular Service: <span id="popularService">-</span></p>
+                </div>
+
+                <!-- Service CRUD -->
+                <div class="input-group">
+                    <select id="serviceCategory" class="auth-btn">
+                        <option value="tiktok">TikTok</option>
+                        <option value="youtube">YouTube</option>
+                        <!-- Add all categories -->
+                    </select>
+                    <input type="text" id="serviceName" placeholder="Service Name">
+                    <input type="number" id="servicePrice" placeholder="Price">
+                    <input type="number" id="serviceMin" placeholder="Minimum Quantity">
+                    <button class="auth-btn" onclick="addNewService()">Add Service</button>
+                </div>
+
+                <!-- Service Logs -->
+                <h4 style="margin-top: 2rem;">Service Activity Log</h4>
+                <table class="service-log-table">
+                    <thead>
+                        <tr>
+                            <th>Service Name</th>
+                            <th>Category</th>
+                            <th>Added Date</th>
+                            <th>Orders</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="serviceLogs">
+                        <!-- Logs will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Admin Password
+        const ADMIN_PASS = "zaib331099";
+        let services = JSON.parse(localStorage.getItem('smm-services')) || {...}; // Your existing services
+
+        // Enhanced Service Structure
+        function enhanceServices() {
+            Object.keys(services).forEach(category => {
+                services[category] = services[category].map(service => ({
+                    ...service,
+                    addedDate: service.addedDate || new Date().toISOString(),
+                    orders: service.orders || 0
+                }));
+            });
+            localStorage.setItem('smm-services', JSON.stringify(services));
+        }
+
+        // Admin Functions
+        function showAdminLogin() {
+            document.getElementById('adminOverlay').style.display = 'block';
+        }
+
+        function verifyAdmin() {
+            const pass = document.getElementById('adminPassword').value;
+            if(pass === ADMIN_PASS) {
+                document.getElementById('serviceManagement').style.display = 'block';
+                loadServiceLogs();
+                updateStatistics();
+            } else {
+                alert('Invalid Admin Password!');
+            }
+        }
+
+        function addNewService() {
+            const category = document.getElementById('serviceCategory').value;
+            const newService = {
+                name: document.getElementById('serviceName').value,
+                price: Number(document.getElementById('servicePrice').value),
+                min: Number(document.getElementById('serviceMin').value),
+                addedDate: new Date().toISOString(),
+                orders: 0
+            };
+
+            services[category].push(newService);
+            localStorage.setItem('smm-services', JSON.stringify(services));
+            loadServiceLogs();
+            updateStatistics();
+            refreshServices();
+        }
+
+        function loadServiceLogs() {
+            const tbody = document.getElementById('serviceLogs');
+            tbody.innerHTML = '';
+            
+            Object.keys(services).forEach(category => {
+                services[category].forEach(service => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${service.name}</td>
+                        <td>${category}</td>
+                        <td>${new Date(service.addedDate).toLocaleDateString()}</td>
+                        <td>${service.orders}</td>
+                        <td>
+                            <button class="auth-btn" onclick="editService('${category}', '${service.name}')">Edit</button>
+                            <button class="auth-btn danger" onclick="deleteService('${category}', '${service.name}')">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            });
+        }
+
+        function updateStatistics() {
+            document.getElementById('totalServices').textContent = 
+                Object.values(services).flat().length;
+            
+            const allServices = Object.values(services).flat();
+            const popular = allServices.reduce((max, service) => 
+                service.orders > max.orders ? service : max, {orders: -1});
+            
+            document.getElementById('popularService').textContent = 
+                popular.name || '-';
+        }
+
+        function deleteService(category, name) {
+            services[category] = services[category].filter(s => s.name !== name);
+            localStorage.setItem('smm-services', JSON.stringify(services));
+            loadServiceLogs();
+            updateStatistics();
+            refreshServices();
+        }
+
+        function editService(category, name) {
+            const service = services[category].find(s => s.name === name);
+            const newName = prompt('Edit Service Name:', service.name);
+            const newPrice = prompt('Edit Price:', service.price);
+            const newMin = prompt('Edit Minimum Quantity:', service.min);
+
+            if(newName) service.name = newName;
+            if(newPrice) service.price = Number(newPrice);
+            if(newMin) service.min = Number(newMin);
+
+            localStorage.setItem('smm-services', JSON.stringify(services));
+            loadServiceLogs();
+            refreshServices();
+        }
+
+        // Track Orders
+        function confirmPayment() {
+            // ... existing code ...
+            
+            // Update service orders
+            const service = services[currentService.category]
+                .find(s => s.name === currentService.name);
+            service.orders++;
+            localStorage.setItem('smm-services', JSON.stringify(services));
+            
+            // ... rest of existing code ...
+        }
+
+        // Initialize enhanced services
+        enhanceServices();
+    </script>
+</body>
+</html>
